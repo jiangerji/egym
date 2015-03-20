@@ -13,6 +13,7 @@ def randomLatitude():
 def randomPosition():
     return (randomLatitude(), randomLongitude())
 
+# 测试打印几个经纬度附近点的geohash
 def a():
     latitude = randomLatitude()
     longitude = randomLongitude()
@@ -50,6 +51,7 @@ def checkEncodeAndDecode():
         print "error"
 
 import math
+# 获取起点和终点的公里数
 def getDistance(start, end):
     startLat, startLon = start
     endLat, endLon = end
@@ -71,6 +73,7 @@ def getDistance(start, end):
     s *= r
     return s
 
+# 测试获取公里数
 def b():
     latitude = float("%.4f"%randomLatitude())
     longitude = float("%.4f"%randomLongitude())
@@ -94,14 +97,14 @@ def b():
 
 import sqlite3
 
+latitude = 30.178903
+longitude = 45.698545
+
 def testLBS():
     cx = sqlite3.connect("lbs.db")
     cx.execute('CREATE  TABLE  IF NOT EXISTS "lbs" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "latitude" FLOAT NOT NULL , "longitude" FLOAT NOT NULL , "geohash" VARCHAR(12) NOT NULL )')
 
     insertCmd = 'INSERT INTO "lbs" ("latitude","longitude","geohash") VALUES (?,?,?)'
-
-    latitude = 30.178903
-    longitude = 45.698545
 
     # 生成100000个半径100多公里范围位置信息
     if False:
@@ -115,6 +118,13 @@ def testLBS():
             cx.execute(insertCmd, ("%.6f"%realLat, "%.6f"%realLon, posGeoHash))
     cx.commit()
 
+    cu.close()
+    cx.close()
+
+# 获取距离内的位置
+def getNeighbours(levelQuota=1):
+    cx = sqlite3.connect("lbs.db")
+
     selectCmd = "select * from lbs where geohash='%s'"
 
     # 找出最近的item
@@ -125,7 +135,7 @@ def testLBS():
     latlon = (orthLatitude, orthLongitude)
     print latlon, geohash.encode(orthLatitude, orthLongitude)
 
-    levelQuota = 5
+    # levelQuota = level
     for level in range(1, levelQuota):
         neighbours = getNeighbourArea(latlon, level)
         print "Level", level
@@ -141,9 +151,6 @@ def testLBS():
                     # print i
                     distance = getDistance((latitude, longitude), (nLat, nLon))
                     print "  %10d %f %f %6d"%(data[0], nLat, nLon, distance*1000), i
-
-    cu.close()
-    cx.close()
 
 
 def getNeighbourArea(latlon, level=1):
@@ -175,7 +182,8 @@ def getNeighbourArea(latlon, level=1):
 
     return neighbours
 
-testLBS()
+# testLBS()
+getNeighbours(levelQuota=5)
 
 # python -m profile -s time test_genhash.py
          
