@@ -114,7 +114,7 @@ def testLBS():
 
     # 生成100000个半径100多公里范围位置信息
     if True:
-        for i in xrange(10**5):
+        for i in xrange(10**6):
             deltaLat = random.randint(-1, 1) + random.randint(0, 350000) * 0.000001
             deltaLon = random.randint(-1, 1) + random.randint(0, 350000) * 0.000001
 
@@ -159,8 +159,6 @@ def getNeighbours(levelQuota=1):
 
     cx = sqlite3.connect("lbs.db")
 
-    selectCmd = "select * from lbs where geohash='%s'"
-
     latlons = []
 
     # 找出最近的item
@@ -190,50 +188,107 @@ def getNeighbours(levelQuota=1):
     # levelQuota = level
     for level in range(1, levelQuota+1):
         latlon = latlons[level-1]
-        print "Level", level, latlon
+        # print "Level", level, latlon
         getNeighbourArea_1(cu, latlon, level)
-        break
+        # if level >= 3:
+        #     break
 
+# 
+# level1: 大概2公里区域内的
+# level2: 大概4公里区域内
+# level3: 大概10公里区域
+# level4: 大概20~30公里区域
 def getNeighbourArea_1(cursor, latlon, level=1):
-    level = 1
+    # level = 1
 
     sLatitude = latlon[0]
     sLongitude = latlon[1]
 
-    geohashCode = geohash.encode(sLatitude, sLongitude)
-    selectCmdFormat = "select * from lbs where geohash='%s';"
+    # geohashCode = geohash.encode(sLatitude, sLongitude)
 
     # 获取加上相邻的25个象限
     orthLatitude = float("%.2f"%(math.floor(latitude*100)/100))
     orthLongitude = float("%.2f"%(math.floor(longitude*100)/100))
-    # print orthLatitude, orthLongitude
+
+    orthLatitude = latlon[0]
+    orthLongitude = latlon[1]
+
+    div = [0, 1, 2, 5, 10]
+    divDesc = [
+        "没有意义",
+        "2公里左右",
+        "4公里左右",
+        "10公里左右",
+        "20公里左右",
+    ]
+    print "Level", level, ":", divDesc[level]
+    print "Location GEO:", orthLatitude, orthLongitude
 
     latlons = []
     for i in range(5):
-        tLat = float("%.2f"%((int(orthLatitude*100) + (i-2)) / 100.0))
+        tLat = float("%.2f"%((int(orthLatitude*100) + (i-2)*div[level]) / 100.0))
         for j in range(5):
-            tLon = float("%.2f"%((int(orthLongitude*100) + (j-2)) / 100.0))
+            tLon = float("%.2f"%((int(orthLongitude*100) + (j-2)*div[level]) / 100.0))
             latlons.append((tLat, tLon))
 
-    print latlons
+    # print latlons
 
     # 查询象限区域内的点
     selectParams = ["geohash", "geohash2", "geohash5", "geohash10"]
     selectCmdFormat = "select * from lbs where %s='%s' order by id;"
 
+    count = 0
+    maxDistance = 0
+    idDatas = []
     for latlon in latlons:
         geohashCode = geohash.encode(latlon[0], latlon[1])
         selectCmd = selectCmdFormat%(selectParams[level-1], geohashCode)
 
         cursor.execute(selectCmd)
         datas = cursor.fetchall()
+        
         if len(datas) > 0:
             for data in datas:
                 nLat = data[1]
                 nLon = data[2]
-                distance = getDistance((latitude, longitude), (nLat, nLon))
-                print "  %10d %f %f %6d"%(data[0], nLat, nLon, distance*1000)
+                distance = getDistance((latitude, longitude), (nLat, nLon))*1000
+                # print "  %10d %f %f %6d"%(data[0], nLat, nLon, distance)
+                count += 1
+                if maxDistance < distance:
+                    maxDistance = int(distance)
+                idDatas.append(data[0])
+    idDatas.sort()
+    
+    # 用于测试，有多少数据没有被查询出来，验证算法是否基本正确
+    debugSelectCmd = "select * from lbs where distance < %d; "%(maxDistance+1)
+    cursor.execute(debugSelectCmd)
+    debugDatas = cursor.fetchall()
 
+    notFindOut = []
+    for data in debugDatas:
+        _id = data[0]
+        if _id not in idDatas:
+            notFindOut.append(data)
+    print " ", len(notFindOut), "positions not in current select."
+
+    notFindOutMinDis = 10000000
+    notFindOutMaxDis = 0
+    quota = div[level]*2000
+    for i in notFindOut:
+        if i[7] < notFindOutMinDis:
+            notFindOutMinDis = i[7]
+
+        if i[7] > notFindOutMaxDis:
+            notFindOutMaxDis = i[7]
+
+        if i[7] <= quota:
+            print i
+        # print "   ", i
+    print "  Not in current select:", notFindOutMinDis, notFindOutMaxDis
+    # 测试中0.2%以下的可能性，在半径内的点无法查询出来
+
+    print "  There are", len(debugDatas), "position in", maxDistance
+    print "  Total", count, "postion, max distance", maxDistance, "\n"
 
 def getNeighbourArea(cursor, latlon, level=1):
     if level < 1:
