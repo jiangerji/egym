@@ -191,25 +191,10 @@ def getNeighbours(levelQuota=1):
     for level in range(1, levelQuota+1):
         latlon = latlons[level-1]
         print "Level", level, latlon
-        getNeighbourArea(cu, latlon, level)
-        # print latlon, geohash.encode(orthLatitude, orthLongitude)
+        getNeighbourArea_1(cu, latlon, level)
+        break
 
-        # for i in neighbours:
-        #     lat, lon = geohash.decode(i)
-        #     cmd = selectCmd%i
-        #     cu.execute(cmd)
-        #     datas = cu.fetchall()
-        #     if len(datas) > 0:
-        #         for data in datas:
-        #             nLat = data[1]
-        #             nLon = data[2]
-        #             # print i
-        #             distance = getDistance((latitude, longitude), (nLat, nLon))
-        #             print "  %10d %f %f %6d"%(data[0], nLat, nLon, distance*1000), i
-
-
-
-def getNeighbourArea_1(cursor, latlon):
+def getNeighbourArea_1(cursor, latlon, level=1):
     level = 1
 
     sLatitude = latlon[0]
@@ -217,10 +202,38 @@ def getNeighbourArea_1(cursor, latlon):
 
     geohashCode = geohash.encode(sLatitude, sLongitude)
     selectCmdFormat = "select * from lbs where geohash='%s';"
-    
-    # 获取相邻的4个象限
+
+    # 获取加上相邻的25个象限
     orthLatitude = float("%.2f"%(math.floor(latitude*100)/100))
     orthLongitude = float("%.2f"%(math.floor(longitude*100)/100))
+    # print orthLatitude, orthLongitude
+
+    latlons = []
+    for i in range(5):
+        tLat = float("%.2f"%((int(orthLatitude*100) + (i-2)) / 100.0))
+        for j in range(5):
+            tLon = float("%.2f"%((int(orthLongitude*100) + (j-2)) / 100.0))
+            latlons.append((tLat, tLon))
+
+    print latlons
+
+    # 查询象限区域内的点
+    selectParams = ["geohash", "geohash2", "geohash5", "geohash10"]
+    selectCmdFormat = "select * from lbs where %s='%s' order by id;"
+
+    for latlon in latlons:
+        geohashCode = geohash.encode(latlon[0], latlon[1])
+        selectCmd = selectCmdFormat%(selectParams[level-1], geohashCode)
+
+        cursor.execute(selectCmd)
+        datas = cursor.fetchall()
+        if len(datas) > 0:
+            for data in datas:
+                nLat = data[1]
+                nLon = data[2]
+                distance = getDistance((latitude, longitude), (nLat, nLon))
+                print "  %10d %f %f %6d"%(data[0], nLat, nLon, distance*1000)
+
 
 def getNeighbourArea(cursor, latlon, level=1):
     if level < 1:
@@ -283,8 +296,8 @@ def getNeighbourArea1(latlon, level=1):
 
     return neighbours
 
-testLBS()
-# getNeighbours(levelQuota=5)
+# testLBS()
+getNeighbours(levelQuota=5)
 
 # python -m profile -s time test_genhash.py
          
